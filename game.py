@@ -1,4 +1,5 @@
 import copy
+import itertools
 
 class CellState:
     """Defines constants for the possible states of each cell."""
@@ -14,13 +15,27 @@ class Grid:
         self.dimensionality = dimensionality
         self.data = reduce(lambda data, x: [copy.deepcopy(data) for i in range(length)], range(dimensionality), CellState.EMPTY)
 
-    def __str__(self):
-        return str(self.data)
-
-    def get(self, *coordinates):
+    def __getitem__(self, coordinates):
+        if type(coordinates) is int: coordinates = (coordinates,)
         if len(coordinates) != self.dimensionality: raise ValueError("Expected %d coordinates." % self.dimensionality)
         return reduce(lambda data, coordinate: data[coordinate], coordinates, self.data)
 
-    def set(self, value, *coordinates):
+    def __setitem__(self, coordinates, value):
+        if type(coordinates) is int: coordinates = (coordinates,)
         if len(coordinates) != self.dimensionality: raise ValueError("Expected %d coordinates." % self.dimensionality)
         reduce(lambda data, coordinate: data[coordinate], coordinates[:-1], self.data)[coordinates[-1]] = value
+
+    def __eq__(self, other):
+        return type(other) is Grid and self.data == other.data
+
+    def __str__(self):
+        return str(self.data)
+
+    def __copy__(self):
+        new = Grid(self.length, self.dimensionality)
+        new.data = self.data
+
+    def _deepcopy__(self):
+        new = Grid(self.length, self.dimensionality)
+        for coordinates in itertools.combinations_with_replacement(range(self.length), self.dimensionality):
+            new[coordinates] = self[coordinates]
