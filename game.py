@@ -12,15 +12,15 @@ class Grid:
     def __init__(self, length, dimensionality):
         self.length = length
         self.dimensionality = dimensionality
-        self.data = reduce(lambda data, x: [copy.copy(data) for i in range(length)], range(dimensionality), CellState.EMPTY)
+        self.data = reduce(lambda data, x: [copy.deepcopy(data) for i in range(length)], range(dimensionality), CellState.EMPTY)
 
     def __str__(self):
         return str(self.data)
 
     def get(self, *coordinates):
-        if len(coordinates) != self.dimensionality: raise ValueError("${dimensionality} coordinates must be specified." % dimensionality)
+        if len(coordinates) != self.dimensionality: raise ValueError("Expected %d coordinates." % self.dimensionality)
         return reduce(lambda data, coordinate: data[coordinate], coordinates, self.data)
 
     def set(self, value, *coordinates):
-        if len(coordinates) != self.dimensionality: raise ValueError("${dimensionality} coordinates must be specified." % dimensionality)
+        if len(coordinates) != self.dimensionality: raise ValueError("Expected %d coordinates." % self.dimensionality)
         reduce(lambda data, coordinate: data[coordinate], coordinates[:-1], self.data)[coordinates[-1]] = value
