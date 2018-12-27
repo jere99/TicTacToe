@@ -1,6 +1,6 @@
 def setup():
-    size(400, 400)
+    this.surface.setTitle("Tic-Tac-Toe")
+    size(this.displayWidth, this.displayHeight)
 
 def draw():
     background(51)
-    fill(0)
