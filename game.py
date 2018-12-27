@@ -7,8 +7,10 @@ class CellState:
     PLAYER1 = 'X'
     PLAYER2 = 'O'
 
+    NEXT = {PLAYER1: PLAYER2, PLAYER2: PLAYER1}
+
 class Grid:
-    """Represents a tic-tac-toe grid of arbitrary length and dimensionality."""
+    """Represents an n-dimensional tic-tac-toe grid of arbitrary size."""
 
     def __init__(self, length, dimensionality):
         self.length = length
@@ -34,8 +36,41 @@ class Grid:
     def __copy__(self):
         new = Grid(self.length, self.dimensionality)
         new.data = self.data
+        return new
 
-    def __deepcopy__(self):
+    def __deepcopy__(self, memodict={}):
         new = Grid(self.length, self.dimensionality)
-        for coordinates in itertools.combinations_with_replacement(range(self.length), self.dimensionality):
+        for coordinates in itertools.product(range(self.length), repeat=self.dimensionality):
             new[coordinates] = self[coordinates]
+        return new
+
+class GameState:
+    """Represents a state of a game of tic-tac-toe."""
+
+    def __init__(self, board, turn):
+        self.board = board
+        self.turn = turn
+
+    def __eq__(self, other):
+        return type(other) is GameState and self.board == other.board and self.turn == other.turn
+
+    def __str__(self):
+        return "Turn: %s, Board: %s" % (self.turn, str(self.board))
+
+    def __copy__(self):
+        return GameState(self.board, self.turn)
+
+    def __deepcopy__(self, memodict={}):
+        return GameState(copy.deepcopy(self.board), self.turn)
+
+    def generateSuccessor(self, coordinates):
+        successor = copy.deepcopy(self)
+        successor.board[coordinates] = successor.turn
+        successor.turn = CellState.NEXT[successor.turn]
+        return successor
+
+    def getLegalActions(self):
+        return [] if self.isWin(CellState.PLAYER1) or self.isWin(CellState.PLAYER2) else filter(lambda coordinates: self.board[coordinates] == CellState.EMPTY, itertools.product(range(self.board.length), repeat=self.board.dimensionality))
+
+    def isWin(self, player):
+        return False
