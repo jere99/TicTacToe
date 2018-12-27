@@ -35,7 +35,7 @@ class Grid:
         new = Grid(self.length, self.dimensionality)
         new.data = self.data
 
-    def _deepcopy__(self):
+    def __deepcopy__(self):
         new = Grid(self.length, self.dimensionality)
         for coordinates in itertools.combinations_with_replacement(range(self.length), self.dimensionality):
             new[coordinates] = self[coordinates]
