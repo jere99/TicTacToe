@@ -12,19 +12,23 @@ class CellState:
 class Grid:
     """Represents an n-dimensional tic-tac-toe grid of arbitrary size."""
 
-    linescache = {}
+    memoizedLines = {}
 
-    def __init__(self, length, dimensionality):
-        self.length = length
-        self.dimensionality = dimensionality
-        directions = list(itertools.chain(*[list(itertools.combinations(range(dimensionality), d)) for d in range(1, dimensionality + 1)]))
-        if (length, dimensionality) not in Grid.linescache:
+    @classmethod
+    def generateLines(cls, length, dimensionality):
+        if (length, dimensionality) not in cls.memoizedLines:
+            directions = list(itertools.chain(*[list(itertools.combinations(range(dimensionality), d)) for d in range(1, dimensionality + 1)]))
             lines = []
             for d in range(dimensionality):
                 for dir in filter(lambda direction: d in direction, directions):
                     lines += map(lambda cell: tuple(sorted([tuple([cell[i] + x if cell[i] == 0 and i in dir else cell[i] - x if cell[i] == length - 1 and i in dir else cell[i] for i in range(dimensionality)]) for x in range(length)])), filter(lambda cell: reduce(lambda acc, dimension: acc and (cell[dimension] == 0 or cell[dimension] == length - 1), dir, True), itertools.product(range(length), repeat=dimensionality)))
-            Grid.linescache[(length, dimensionality)] = set(lines)
-        self.lines = Grid.linescache[(length, dimensionality)]
+            cls.memoizedLines[(length, dimensionality)] = set(lines)
+        return cls.memoizedLines[(length, dimensionality)]
+
+    def __init__(self, length, dimensionality):
+        self.length = length
+        self.dimensionality = dimensionality
+        self.lines = self.generateLines(length, dimensionality)
         self.data = reduce(lambda data, x: [copy.deepcopy(data) for i in range(length)], range(dimensionality), CellState.EMPTY)
 
     def __getitem__(self, coordinates):
