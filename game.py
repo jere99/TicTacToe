@@ -12,9 +12,19 @@ class CellState:
 class Grid:
     """Represents an n-dimensional tic-tac-toe grid of arbitrary size."""
 
+    linescache = {}
+
     def __init__(self, length, dimensionality):
         self.length = length
         self.dimensionality = dimensionality
+        directions = list(itertools.chain(*[list(itertools.combinations(range(dimensionality), d)) for d in range(1, dimensionality + 1)]))
+        if (length, dimensionality) not in Grid.linescache:
+            lines = []
+            for d in range(dimensionality):
+                for dir in filter(lambda direction: d in direction, directions):
+                    lines += map(lambda cell: tuple(sorted([tuple([cell[i] + x if cell[i] == 0 and i in dir else cell[i] - x if cell[i] == length - 1 and i in dir else cell[i] for i in range(dimensionality)]) for x in range(length)])), filter(lambda cell: reduce(lambda acc, dimension: acc and (cell[dimension] == 0 or cell[dimension] == length - 1), dir, True), itertools.product(range(length), repeat=dimensionality)))
+            Grid.linescache[(length, dimensionality)] = set(lines)
+        self.lines = Grid.linescache[(length, dimensionality)]
         self.data = reduce(lambda data, x: [copy.deepcopy(data) for i in range(length)], range(dimensionality), CellState.EMPTY)
 
     def __getitem__(self, coordinates):
@@ -73,4 +83,4 @@ class GameState:
         return [] if self.isWin(CellState.PLAYER1) or self.isWin(CellState.PLAYER2) else filter(lambda coordinates: self.board[coordinates] == CellState.EMPTY, itertools.product(range(self.board.length), repeat=self.board.dimensionality))
 
     def isWin(self, player):
-        return False
+        return reduce(lambda found, line: found or reduce(lambda success, cell: success and self.board[cell] == player, line, True), self.board.lines, False)
