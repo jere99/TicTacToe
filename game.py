@@ -88,3 +88,34 @@ class GameState:
 
     def isWin(self, player):
         return reduce(lambda found, line: found or reduce(lambda success, cell: success and self.board[cell] == player, line, True), self.board.lines, False)
+
+class Game:
+    """Represents a game of tic-tac-toe."""
+
+    def __init__(self, length, dimensionality):
+        self.length = length
+        self.dimensionality = dimensionality
+        self.state = GameState(Grid(length, dimensionality), CellState.PLAYER1)
+
+    def __str__(self):
+        return "A %s game of Tic-Tac-Toe | %s, Winner: %s" % ('x'.join(itertools.repeat(str(self.length), self.dimensionality)), str(self.state), self.getWinner())
+
+    def __copy__(self):
+        new = Game(self.length, self.dimensionality)
+        new.state = self.state
+        return new
+
+    def __deepcopy__(self, memodict={}):
+        new = Game(self.length, self.dimensionality)
+        new.state = copy.deepcopy(self.state)
+        return new
+
+    def makeMove(self, coordinates):
+        if coordinates not in self.state.getLegalActions(): return False
+        self.state = self.state.generateSuccessor(coordinates)
+        return True
+
+    def getWinner(self):
+        player1, player2 = self.state.isWin(CellState.PLAYER1), self.state.isWin(CellState.PLAYER2)
+        if player1 and player2: raise Exception("Game state is invalid -- both players have won.")
+        return CellState.PLAYER1 if player1 else CellState.PLAYER2 if player2 else None
