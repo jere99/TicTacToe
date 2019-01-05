@@ -89,6 +89,9 @@ class GameState:
     def isWin(self, player):
         return reduce(lambda found, line: found or reduce(lambda success, cell: success and self.board[cell] == player, line, True), self.board.lines, False)
 
+    def getFilledCells(self):
+        return map(lambda coordinates: (coordinates, self.board[coordinates]), filter(lambda coordinates: self.board[coordinates] != CellState.EMPTY, itertools.product(range(self.board.length), repeat=self.board.dimensionality)))
+
 class Game:
     """Represents a game of tic-tac-toe."""
 
@@ -119,3 +122,6 @@ class Game:
         player1, player2 = self.state.isWin(CellState.PLAYER1), self.state.isWin(CellState.PLAYER2)
         if player1 and player2: raise Exception("Game state is invalid -- both players have won.")
         return CellState.PLAYER1 if player1 else CellState.PLAYER2 if player2 else None
+
+    def getFilledCells(self):
+        return self.state.getFilledCells()
