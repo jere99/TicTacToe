@@ -9,6 +9,7 @@ CELL_CONSTANT = 0.8
 def setup():
     this.surface.setTitle("Tic-Tac-Toe")
     fullScreen()
+    if DIMENSIONALITY != 2: raise ValueError("%d-dimensional rendering is not currently supported." % DIMENSIONALITY)
 
     global SIZE, CELL_SIZE, X_MARGIN, Y_MARGIN
     SIZE = min(width, height) * SIZE_CONSTANT
