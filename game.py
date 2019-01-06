@@ -31,6 +31,15 @@ class Grid:
         self.lines = self.generateLines(length, dimensionality)
         self.data = reduce(lambda data, x: [copy.deepcopy(data) for i in range(length)], range(dimensionality), CellState.EMPTY)
 
+    def __eq__(self, other):
+        return type(other) is Grid and self.data == other.data
+
+    def __nonzero__(self):
+        return reduce(lambda result, cell: result or cell != CellState.EMPTY, self, False)
+
+    def __str__(self):
+        return str(self.data)
+
     def __getitem__(self, coordinates):
         if type(coordinates) is int: coordinates = (coordinates,)
         if len(coordinates) != self.dimensionality: raise ValueError("Expected %d coordinates." % self.dimensionality)
@@ -41,11 +50,11 @@ class Grid:
         if len(coordinates) != self.dimensionality: raise ValueError("Expected %d coordinates." % self.dimensionality)
         reduce(lambda data, coordinate: data[coordinate], coordinates[:-1], self.data)[coordinates[-1]] = value
 
-    def __eq__(self, other):
-        return type(other) is Grid and self.data == other.data
+    def coordinatesIterator(self):
+        return itertools.product(range(self.length), repeat=self.dimensionality)
 
-    def __str__(self):
-        return str(self.data)
+    def __iter__(self):
+        return iter(map(lambda coordinates: self[coordinates], self.coordinatesIterator()))
 
     def __copy__(self):
         new = Grid(self.length, self.dimensionality)
@@ -54,7 +63,7 @@ class Grid:
 
     def __deepcopy__(self, memodict={}):
         new = Grid(self.length, self.dimensionality)
-        for coordinates in itertools.product(range(self.length), repeat=self.dimensionality):
+        for coordinates in self.coordinatesIterator():
             new[coordinates] = self[coordinates]
         return new
 
@@ -84,13 +93,16 @@ class GameState:
         return successor
 
     def getLegalActions(self):
-        return [] if self.isWin(CellState.PLAYER1) or self.isWin(CellState.PLAYER2) else filter(lambda coordinates: self.board[coordinates] == CellState.EMPTY, itertools.product(range(self.board.length), repeat=self.board.dimensionality))
+        return [] if self.isWin(CellState.PLAYER1) or self.isWin(CellState.PLAYER2) else filter(lambda coordinates: self.board[coordinates] == CellState.EMPTY, self.board.coordinatesIterator())
 
     def isWin(self, player):
-        return reduce(lambda found, line: found or reduce(lambda success, cell: success and self.board[cell] == player, line, True), self.board.lines, False)
+        return player and reduce(lambda found, line: found or reduce(lambda success, cell: success and self.board[cell] == player, line, True), self.board.lines, False)
+
+    def getWinningLine(self, player):
+        return player and reduce(lambda found, line: found if found else line if reduce(lambda success, cell: success and self.board[cell] == player, line, True) else None, self.board.lines, None)
 
     def getFilledCells(self):
-        return map(lambda coordinates: (coordinates, self.board[coordinates]), filter(lambda coordinates: self.board[coordinates] != CellState.EMPTY, itertools.product(range(self.board.length), repeat=self.board.dimensionality)))
+        return map(lambda coordinates: (coordinates, self.board[coordinates]), filter(lambda coordinates: self.board[coordinates] != CellState.EMPTY, self.board.coordinatesIterator()))
 
 class Game:
     """Represents a game of tic-tac-toe."""
@@ -121,7 +133,8 @@ class Game:
     def getWinner(self):
         player1, player2 = self.state.isWin(CellState.PLAYER1), self.state.isWin(CellState.PLAYER2)
         if player1 and player2: raise Exception("Game state is invalid -- both players have won.")
-        return CellState.PLAYER1 if player1 else CellState.PLAYER2 if player2 else None
+        winner = CellState.PLAYER1 if player1 else CellState.PLAYER2 if player2 else None
+        return (winner, self.state.getWinningLine(winner))
 
     def getFilledCells(self):
         return self.state.getFilledCells()
