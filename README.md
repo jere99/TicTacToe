@@ -1,2 +1,2 @@
 # TicTacToe
-Extended version of the traditional Tic-Tac-Toe game with support for higher dimensional gameplay.
+Lightweight implementation of the traditional Tic-Tac-Toe game with plans to support higher dimensional gameplay.
