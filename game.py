@@ -188,6 +188,21 @@ class GameState:
         if self.isWin(self.turn):
             raise RuntimeError("Player with current turn has won.")
 
+    def emptyCells(self):
+        """
+        Generates a list of the coordinates of all unoccupied cells.
+
+        Returns:
+            (list) tuples of the coordinates of all unoccupied cells
+        """
+        result = []
+        bitmask = self.player1 | self.player2
+        for i in range(9):
+            if not (bitmask & 1):
+                result.append(((8 - i) // 3, (8 - i) % 3))
+            bitmask >>= 1
+        return result
+
     def generateSuccessor(self, cell):
         """
         Generates a GameState which represents the position after one move is made from the current GameState.
@@ -201,7 +216,7 @@ class GameState:
         Returns:
             (GameState) the successor position
         """
-        if self[cell] != ' ':
+        if cell not in self.emptyCells():
             raise ValueError(f"{cell} is already occupied.")
         bitmask = 1 << (8 - (cell[0] * 3 + cell[1]))
         return GameState(self.player1 | bitmask if self.turn else self.player1, self.player2 if self.turn else self.player2 | bitmask, not self.turn)
@@ -218,6 +233,7 @@ if __name__ == '__main__':
     g = GameState()
     print(g)
     for cell in [(0, 0), (1, 0), (1, 1), (2, 2), (0, 1), (0, 2), (2, 1)]:
+        print(g.emptyCells())
         g = g.generateSuccessor(cell)
         print(g)
 
