@@ -1,4 +1,3 @@
-from copy import copy
 import functools
 import itertools
 
@@ -112,13 +111,13 @@ class GameState:
     def __getitem__(self, cell):
         """
         Returns a single-character representation of one of the cells in the GameState.
-        The characters are specified in the class constants PLAYER_1 and PLAYER_2.
+        The characters are specified in the class constants PLAYER_1, PLAYER_2, and EMPTY_CELL.
 
         Parameters:
             cell (tuple) the coordinates of the cell to access
         Raises:
             TypeError if the cell parameter is not a tuple or has the wrong length
-            KeyError if the specified indices are not within the valid range
+            IndexError if the specified indices are not within the valid range
         Returns:
             (str) the single-character representation for the specified cell
         """
@@ -130,7 +129,7 @@ class GameState:
             if not isinstance(coordinate, int):
                 raise TypeError("Each coordinate must be an integer.")
             if coordinate not in range(3):
-                raise KeyError(f"{coordinate} is out of range.")
+                raise IndexError(f"{coordinate} is out of range.")
 
         bitmask = 1 << (8 - (cell[0] * 3 + cell[1]))
         return self.PLAYER_1 if self.player1 & bitmask else self.PLAYER_2 if self.player2 & bitmask else self.EMPTY_CELL
@@ -142,7 +141,14 @@ class GameState:
         """
         return GameState(self.player1, self.player2, self.turn)
 
-    def gridFilled(self):
+    def get_turn(self):
+        """
+        Returns:
+            (bool) True if it is the first player's turn, False if it is the second player's turn
+        """
+        return self.turn
+
+    def is_grid_filled(self):
         """
         Determines whether the grid is completely filled and no further moves are possible.
 
@@ -151,7 +157,7 @@ class GameState:
         """
         return not (0x1FF ^ (self.player1 | self.player2))
 
-    def isWin(self, turn):
+    def is_win(self, turn):
         """
         Determines whether a particular player has a winning sequence
 
@@ -168,8 +174,8 @@ class GameState:
 
     def validate(self):
         """
-        Determines whether the GameState represents a valid TicTacToe position.
-        A valid TicTacToe position satisfies the following conditions:
+        Determines whether the GameState represents a valid Tic-Tac-Toe position.
+        A valid Tic-Tac-Toe position satisfies the following conditions:
             1) only one player occupies each cell
             2) the turn is consistent with the number of cells occupied by each player
             3) at most one player has a winning sequence
@@ -183,12 +189,12 @@ class GameState:
             raise RuntimeError("Cell is occupied by both players.")
         if bit_sum(self.player1) - bit_sum(self.player2) - int(not self.turn):
             raise RuntimeError("Cell distribution is invalid.")
-        if self.isWin(True) and self.isWin(False):
+        if self.is_win(True) and self.is_win(False):
             raise RuntimeError("Both players have won.")
-        if self.isWin(self.turn):
+        if self.is_win(self.turn):
             raise RuntimeError("Player with current turn has won.")
 
-    def emptyCells(self):
+    def empty_cells_list(self):
         """
         Generates a list of the coordinates of all unoccupied cells.
 
@@ -203,7 +209,7 @@ class GameState:
             bitmask >>= 1
         return result
 
-    def generateSuccessor(self, cell):
+    def generate_successor(self, cell):
         """
         Generates a GameState which represents the position after one move is made from the current GameState.
 
@@ -211,15 +217,101 @@ class GameState:
             cell (tuple) the coordinates of the cell to be updated
         Raises:
             TypeError if the cell parameter is not a tuple or has the wrong length
-            KeyError if the specified indices are not within the valid range
+            IndexError if the specified indices are not within the valid range
             ValueError if the cell is already occupied
         Returns:
             (GameState) the successor position
         """
-        if cell not in self.emptyCells():
+        if cell not in self.empty_cells_list():
             raise ValueError(f"{cell} is already occupied.")
         bitmask = 1 << (8 - (cell[0] * 3 + cell[1]))
         return GameState(self.player1 | bitmask if self.turn else self.player1, self.player2 if self.turn else self.player2 | bitmask, not self.turn)
+
+
+class Game:
+    """Object which represents a Tic-Tac-Toe game."""
+
+    def __init__(self):
+        """
+        Creates a new game with an empty board.
+        """
+        self.state = GameState()
+
+    def __str__(self):
+        """
+        Returns:
+            (str) human-readable representation of the Game
+        """
+        winner = "" if self else "\nResult: " + (f"{self.state.PLAYER_1} Wins!" if self.state.is_win(True) else f"{self.state.PLAYER_2} Wins!" if self.state.is_win(False) else "Draw!")
+        return "A 3x3 game of Tic-Tac-Toe\n" + str(self.state) + winner
+
+    def __bool__(self):
+        """
+        Returns:
+            (bool) True if the game is not over, False otherwise
+        """
+        return not self.state.is_grid_filled() and not self.state.is_win(True) and not self.state.is_win(False)
+
+    def get_turn(self):
+        """
+        Returns:
+            (bool) True if it is the first player's turn, False if it is the second player's turn
+        """
+        return self.state.get_turn()
+
+    def get_cell(self, cell):
+        """
+        Returns a single-character representation of one of the cells in the GameState.
+        The characters are specified in the class constants PLAYER_1, PLAYER_2, and EMPTY_CELL.
+
+        Parameters:
+            cell (tuple) the coordinates of the cell to access
+        Raises:
+            TypeError if the cell parameter is not a tuple or has the wrong length
+            IndexError if the specified indices are not within the valid range
+        Returns:
+            (str) the single-character representation for the specified cell
+        """
+        return self.state[cell]
+
+    def evaluate(self):
+        """
+        Evaluates a Game which is completed.
+
+        Raises:
+            RuntimeError if the Game is not over
+        Returns:
+            (int) 1 if player 1 has won
+                 -1 if player 2 has won
+                  0 if the game is a draw
+        """
+        if self:
+            raise RuntimeError("Game is not over.")
+        return 1 if self.state.is_win(True) else -1 if self.state.is_win(False) else 0
+
+    def get_legal_actions(self):
+        """
+        Generates a list of legal moves (unoccupied cells).
+
+        Returns:
+            (list) tuples of the coordinates of all unoccupied cells
+        """
+        return self.state.empty_cells_list()
+
+    def make_move(self, cell):
+        """
+        Makes a move for the player whose turn it currently is.
+
+        Parameters:
+            cell (tuple) the coordinates of the cell to be updated
+        Returns:
+            (bool) True if the move is completed successfully, False otherwise
+        """
+        try:
+            self.state = self.state.generate_successor(cell)
+            return True
+        except (TypeError, IndexError, ValueError):
+            return False
 
 
 if __name__ == '__main__':
@@ -230,12 +322,12 @@ if __name__ == '__main__':
     except ValueError as error:
         print(error)
 
-    g = GameState()
+    g = Game()
     print(g)
     for cell in [(0, 0), (1, 0), (1, 1), (2, 2), (0, 1), (0, 2), (2, 1)]:
-        print(g.emptyCells())
-        g = g.generateSuccessor(cell)
+        g.make_move(cell)
         print(g)
+
 
 # import copy
 # import itertools
