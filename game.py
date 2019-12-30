@@ -2,9 +2,10 @@ import functools
 import itertools
 
 
-def matrix_to_bitmask(grid):
+def matrix_to_bitstring(grid):
     """
-    Converts a 3x3 bit-matrix to a bitmask.
+    Converts a 3x3 bit-matrix to a bitstring.
+    The bitstring representation is row-major with the (0,0) cell being represented in the 9th bit from the right.
 
     Parameters:
         grid (tuple) 3x3 bit-matrix
@@ -12,7 +13,7 @@ def matrix_to_bitmask(grid):
         TypeError if the grid is not a tuple or has the wrong dimensions
         ValueError if any of the entries of the matrix are not bit-valued
     Returns:
-        (int) bitmask representation of the matrix
+        (int) bitstring representation of the matrix
     """
     if not isinstance(grid, tuple) or len(grid) != 3:
         raise TypeError("Grid is not valid.")
@@ -26,20 +27,38 @@ def matrix_to_bitmask(grid):
     return functools.reduce(lambda acc, cell: acc << 1 | cell, itertools.chain.from_iterable(grid))
 
 
-def bit_sum(bitmask):
+def bit_sum(bitstring):
     """
     Calculates the number of 1s in the binary representation of a number.
 
     Parameters:
-        bitmask (int) the number to process
+        bitstring (int) the number to process
     Returns:
         (int) the number of 1s in the binary representation
     """
     count = 0
-    while bitmask:
-        count += bitmask & 1
-        bitmask >>= 1
+    while bitstring:
+        count += bitstring & 1
+        bitstring >>= 1
     return count
+
+
+def occupied_cells(bitstring):
+    """
+    Generates a list of coordinates of the cells which are occupied in a bitstring representation of a 3x3 bit-matrix.
+    Assumes that the bits are in row-major order and the (0,0) cell is represented by the 9th bit from the right.
+
+    Parameters:
+        bitstring (int) a bitstring representing a 3x3 bit-matrix
+    Returns:
+        (list) tuples of cooordinates which have a value of 1 in the bitstring
+    """
+    result = []
+    for i in range(9):
+        if bitstring & 1:
+            result.append(((8 - i) // 3, (8 - i) % 3))
+        bitstring >>= 1
+    return result
 
 
 class GameState:
@@ -66,15 +85,15 @@ class GameState:
         Creates a game state from two 3x3 bit-matrices.
 
         Parameters:
-            player1 (tuple|int) 3x3 bit-matrix or bitmask representing the first player's cells
-            player2 (tuple|int) 3x3 bit-matrix or bitmask representing the second player's cells
+            player1 (tuple|int) 3x3 bit-matrix or bitstring representing the first player's cells
+            player2 (tuple|int) 3x3 bit-matrix or bitstring representing the second player's cells
             turn (bool) True if it's the first player's turn, False if it's the second player's turn
         Raises:
             TypeError if either matrix is neither an int nor a tuple or has the wrong dimensions
             RuntimeError if the specified position is not valid
         """
-        self.player1 = player1 if isinstance(player1, int) else matrix_to_bitmask(player1)
-        self.player2 = player2 if isinstance(player2, int) else matrix_to_bitmask(player2)
+        self.player1 = player1 if isinstance(player1, int) else matrix_to_bitstring(player1)
+        self.player2 = player2 if isinstance(player2, int) else matrix_to_bitstring(player2)
         self.turn = bool(turn)
         self.validate()
 
@@ -83,7 +102,7 @@ class GameState:
         Parameters:
             other (GameState) the object to compare to
         Returns:
-            (bool) True if the two GameStates have the same bitmasks for both players, False otherwise
+            (bool) True if the two GameStates have the same bitstrings for both players, False otherwise
         """
         return isinstance(other, GameState) and not (self.player1 ^ other.player1 | self.player2 ^ other.player2)
 
@@ -92,7 +111,7 @@ class GameState:
         Returns:
             (str) human-readable representation of the GameState
         """
-        return "\n--+---+--\n".join(map(lambda row: " | ".join(map(lambda column: self[(row, column)], range(3))), range(3)))
+        return "\n\t--+---+--\n".join(map(lambda row: "\t" + " | ".join(map(lambda column: self[(row, column)], range(3))), range(3)))
 
     def __hash__(self):
         """
@@ -137,7 +156,7 @@ class GameState:
     def __copy__(self):
         """
         Returns:
-            (GameState) a new object with with the bitmask for each player copied from the existing GameState
+            (GameState) a new object with with the bitstring for each player copied from the existing GameState
         """
         return GameState(self.player1, self.player2, self.turn)
 
@@ -194,20 +213,26 @@ class GameState:
         if self.is_win(self.turn):
             raise RuntimeError("Player with current turn has won.")
 
-    def empty_cells_list(self):
+    def get_cell_states(self):
+        """
+        Generates a dictionary that maps the coordinates of each cell to its state.
+
+        Returns:
+            (dict) map of cell coordinates to the string representation of its state
+        """
+        player1 = [(c, self.PLAYER_1) for c in occupied_cells(self.player1)]
+        player2 = [(c, self.PLAYER_2) for c in occupied_cells(self.player2)]
+        empty = [(c, self.EMPTY_CELL) for c in self.get_empty_cells()]
+        return dict(player1 + player2 + empty)
+
+    def get_empty_cells(self):
         """
         Generates a list of the coordinates of all unoccupied cells.
 
         Returns:
             (list) tuples of the coordinates of all unoccupied cells
         """
-        result = []
-        bitmask = self.player1 | self.player2
-        for i in range(9):
-            if not (bitmask & 1):
-                result.append(((8 - i) // 3, (8 - i) % 3))
-            bitmask >>= 1
-        return result
+        return occupied_cells((0x1FF ^ (self.player1 | self.player2)))
 
     def generate_successor(self, cell):
         """
@@ -222,7 +247,7 @@ class GameState:
         Returns:
             (GameState) the successor position
         """
-        if cell not in self.empty_cells_list():
+        if cell not in self.get_empty_cells():
             raise ValueError(cell + " is already occupied.")
         bitmask = 1 << (8 - (cell[0] * 3 + cell[1]))
         return GameState(self.player1 | bitmask if self.turn else self.player1, self.player2 if self.turn else self.player2 | bitmask, not self.turn)
@@ -242,8 +267,8 @@ class Game:
         Returns:
             (str) human-readable representation of the Game
         """
-        winner = "" if self else "\nResult: " + (self.state.PLAYER_1 + " Wins!" if self.state.is_win(True) else self.state.PLAYER_2 + " Wins!" if self.state.is_win(False) else "Draw!")
-        return "A 3x3 game of Tic-Tac-Toe\n" + str(self.state) + winner
+        result = self.state.PLAYER_1 + " Wins!" if self.state.is_win(True) else self.state.PLAYER_2 + " Wins!" if self.state.is_win(False) else "Draw!"
+        return "A 3x3 game of Tic-Tac-Toe\n" + str(self.state) + ("" if self else "\nResult: " + result)
 
     def __bool__(self):
         """
@@ -289,6 +314,15 @@ class Game:
             raise RuntimeError("Game is not over.")
         return 1 if self.state.is_win(True) else -1 if self.state.is_win(False) else 0
 
+    def get_cell_states(self):
+        """
+        Generates a dictionary that maps the coordinates of each cell to its state.
+
+        Returns:
+            (dict) map of cell coordinates to the string representation of its state
+        """
+        return self.state.get_cell_states()
+
     def get_legal_actions(self):
         """
         Generates a list of legal moves (unoccupied cells).
@@ -296,7 +330,7 @@ class Game:
         Returns:
             (list) tuples of the coordinates of all unoccupied cells
         """
-        return self.state.empty_cells_list()
+        return self.state.get_empty_cells()
 
     def make_move(self, cell):
         """
@@ -310,7 +344,7 @@ class Game:
         try:
             self.state = self.state.generate_successor(cell)
             return True
-        except (TypeError, IndexError, ValueError):
+        except (TypeError, IndexError, ValueError, RuntimeError):
             return False
 
 
@@ -320,3 +354,5 @@ if __name__ == '__main__':
     for cell in [(0, 0), (1, 0), (1, 1), (2, 2), (0, 1), (0, 2), (2, 1)]:
         g.make_move(cell)
         print(g)
+        print(g.get_legal_actions())
+        print(g.get_filled_cells())
