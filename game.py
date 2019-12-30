@@ -127,6 +127,10 @@ class GameState:
         """
         return bool(self.player1 | self.player2)
 
+    def __nonzero__(self):
+        """Python 2 compatibility."""
+        return self.__bool__()
+
     def __getitem__(self, cell):
         """
         Returns a single-character representation of one of the cells in the GameState.
@@ -176,20 +180,19 @@ class GameState:
         """
         return not (0x1FF ^ (self.player1 | self.player2))
 
-    def is_win(self, turn):
+    def get_winning_sequences(self, invert=True):
         """
-        Determines whether a particular player has a winning sequence
+        Determines whether a particular player has a winning sequence.
+        By default only checks the player whose turn it is not currently,
+        but this behavior can be inverted for verification purposes.
 
         Parameters:
-            turn (bool) True if checking the first player, False if checking the second player
+            invert (bool) True if checking the player whose turn it is, False otherwise
         Returns:
-            (bool) True if the specified player has a winning sequence, False otherwise
+            (list) of winning sequences which are lists of coordinate tuples (in some cases there could be multiple sequences)
         """
-        playermask = self.player1 if turn else self.player2
-        for sequence in self.WINNING_SEQUENCES:
-            if not (playermask & sequence ^ sequence):
-                return True
-        return False
+        bitmask = self.player1 if self.turn != invert else self.player2
+        return list(map(lambda s: occupied_cells(s), filter(lambda s: not (bitmask & s ^ s), self.WINNING_SEQUENCES)))
 
     def validate(self):
         """
@@ -208,10 +211,11 @@ class GameState:
             raise RuntimeError("Cell is occupied by both players.")
         if bit_sum(self.player1) - bit_sum(self.player2) - int(not self.turn):
             raise RuntimeError("Cell distribution is invalid.")
-        if self.is_win(True) and self.is_win(False):
-            raise RuntimeError("Both players have won.")
-        if self.is_win(self.turn):
-            raise RuntimeError("Player with current turn has won.")
+        if self.get_winning_sequences(False):
+            if self.get_winning_sequences(True):
+                raise RuntimeError("Both players have won.")
+            else:
+                raise RuntimeError("Player with current turn has won.")
 
     def get_cell_states(self):
         """
@@ -267,7 +271,7 @@ class Game:
         Returns:
             (str) human-readable representation of the Game
         """
-        result = self.state.PLAYER_1 + " Wins!" if self.state.is_win(True) else self.state.PLAYER_2 + " Wins!" if self.state.is_win(False) else "Draw!"
+        result = ((self.state.PLAYER_2 if self.get_turn() else self.state.PLAYER_1) + " Wins!") if self.state.get_winning_sequences() else "Draw!"
         return "A 3x3 game of Tic-Tac-Toe\n" + str(self.state) + ("" if self else "\nResult: " + result)
 
     def __bool__(self):
@@ -275,7 +279,11 @@ class Game:
         Returns:
             (bool) True if the game is not over, False otherwise
         """
-        return not self.state.is_grid_filled() and not self.state.is_win(True) and not self.state.is_win(False)
+        return not self.state.is_grid_filled() and not self.state.get_winning_sequences()
+
+    def __nonzero__(self):
+        """Python 2 compatibility."""
+        return self.__bool__()
 
     def get_turn(self):
         """
@@ -284,21 +292,6 @@ class Game:
         """
         return self.state.get_turn()
 
-    def get_cell(self, cell):
-        """
-        Returns a single-character representation of one of the cells in the GameState.
-        The characters are specified in the class constants PLAYER_1, PLAYER_2, and EMPTY_CELL.
-
-        Parameters:
-            cell (tuple) the coordinates of the cell to access
-        Raises:
-            TypeError if the cell parameter is not a tuple or has the wrong length
-            IndexError if the specified indices are not within the valid range
-        Returns:
-            (str) the single-character representation for the specified cell
-        """
-        return self.state[cell]
-
     def evaluate(self):
         """
         Evaluates a Game which is completed.
@@ -306,13 +299,13 @@ class Game:
         Raises:
             RuntimeError if the Game is not over
         Returns:
-            (int) 1 if player 1 has won
-                 -1 if player 2 has won
-                  0 if the game is a draw
+            (float) 1.0 if player 1 has won
+                   -1.0 if player 2 has won
+                    0.0 if the game is a draw
         """
         if self:
             raise RuntimeError("Game is not over.")
-        return 1 if self.state.is_win(True) else -1 if self.state.is_win(False) else 0
+        return (-1.0 if self.get_turn() else 1.0) if self.state.get_winning_sequences() else 0.0
 
     def get_cell_states(self):
         """
@@ -322,6 +315,21 @@ class Game:
             (dict) map of cell coordinates to the string representation of its state
         """
         return self.state.get_cell_states()
+
+    def get_winning_sequences(self):
+        """
+        Generates a list of winning sequences and determines the winning player.
+
+        Raises:
+            RuntimeError if the game is not over
+        Returns:
+            (tuple)
+                (str) single-character abbreviation of winning player or the empty cell character if the game is a draw
+                (list) of winning sequences which are lists of coordinate tuples (in some cases there could be multiple sequences)
+        """
+        if self:
+            raise RuntimeError("Game is not over.")
+        return (self.state.PLAYER_2 if self.get_turn() else self.state.PLAYER_1, self.state.get_winning_sequences())
 
     def get_legal_actions(self):
         """
@@ -355,4 +363,8 @@ if __name__ == '__main__':
         g.make_move(cell)
         print(g)
         print(g.get_legal_actions())
-        print(g.get_filled_cells())
+        print(g.get_cell_states())
+        try:
+            print(g.get_winning_sequences())
+        except RuntimeError as e:
+            print(e)

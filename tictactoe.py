@@ -1,3 +1,5 @@
+import itertools
+
 import game
 
 WINDOW_PADDING_FACTOR = 0.1
@@ -17,6 +19,8 @@ def setup():
 
     global tictactoe
     tictactoe = game.Game()
+
+    # frameRate(1)
 
 
 def draw():
@@ -40,6 +44,22 @@ def draw():
         else:
             continue
         ellipse(CELL_SIZE * (coordinates[0] + 0.5), CELL_SIZE * (coordinates[1] + 0.5), INTERNAL_CELL_SIZE, INTERNAL_CELL_SIZE)
+
+    try:
+        winner, sequences = tictactoe.get_winning_sequences()
+        if winner == game.GameState.PLAYER_1:
+            stroke(255, 0, 0)  # Red
+        elif winner == game.GameState.PLAYER_2:
+            stroke(0, 0, 255)  # Blue
+        else:
+            raise RuntimeError  # Draw
+    except RuntimeError:  # No winner
+        pass
+    else:
+        strokeWeight(4)
+        noFill()
+        for coordinates in itertools.chain.from_iterable(sequences):
+            ellipse(CELL_SIZE * (coordinates[0] + 0.5), CELL_SIZE * (coordinates[1] + 0.5), INTERNAL_CELL_SIZE, INTERNAL_CELL_SIZE)
 
 
 def mouseClicked():
