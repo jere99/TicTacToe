@@ -21,7 +21,7 @@ def matrix_to_bitmask(grid):
             raise TypeError("Grid is not valid.")
     for cell in itertools.chain.from_iterable(grid):
         if int(cell) not in {0, 1}:
-            raise ValueError(f"{cell} is not a valid bit value.")
+            raise ValueError(cell + " is not a valid bit value.")
 
     return functools.reduce(lambda acc, cell: acc << 1 | cell, itertools.chain.from_iterable(grid))
 
@@ -129,7 +129,7 @@ class GameState:
             if not isinstance(coordinate, int):
                 raise TypeError("Each coordinate must be an integer.")
             if coordinate not in range(3):
-                raise IndexError(f"{coordinate} is out of range.")
+                raise IndexError(coordinate + " is out of range.")
 
         bitmask = 1 << (8 - (cell[0] * 3 + cell[1]))
         return self.PLAYER_1 if self.player1 & bitmask else self.PLAYER_2 if self.player2 & bitmask else self.EMPTY_CELL
@@ -223,7 +223,7 @@ class GameState:
             (GameState) the successor position
         """
         if cell not in self.empty_cells_list():
-            raise ValueError(f"{cell} is already occupied.")
+            raise ValueError(cell + " is already occupied.")
         bitmask = 1 << (8 - (cell[0] * 3 + cell[1]))
         return GameState(self.player1 | bitmask if self.turn else self.player1, self.player2 if self.turn else self.player2 | bitmask, not self.turn)
 
@@ -242,7 +242,7 @@ class Game:
         Returns:
             (str) human-readable representation of the Game
         """
-        winner = "" if self else "\nResult: " + (f"{self.state.PLAYER_1} Wins!" if self.state.is_win(True) else f"{self.state.PLAYER_2} Wins!" if self.state.is_win(False) else "Draw!")
+        winner = "" if self else "\nResult: " + (self.state.PLAYER_1 + " Wins!" if self.state.is_win(True) else self.state.PLAYER_2 + " Wins!" if self.state.is_win(False) else "Draw!")
         return "A 3x3 game of Tic-Tac-Toe\n" + str(self.state) + winner
 
     def __bool__(self):
@@ -315,13 +315,6 @@ class Game:
 
 
 if __name__ == '__main__':
-    print(bin(matrix_to_bitmask(GameState.EMPTY_GRID)))
-    print(bin(matrix_to_bitmask(((1, 0, 0), (0, 1, 0), (0, 0, 1)))))
-    try:
-        print(bin(matrix_to_bitmask(((0, 0, 0), (1, 1, 1), (2, 2, 2)))))  # ValueError
-    except ValueError as error:
-        print(error)
-
     g = Game()
     print(g)
     for cell in [(0, 0), (1, 0), (1, 1), (2, 2), (0, 1), (0, 2), (2, 1)]:
