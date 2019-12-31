@@ -1,4 +1,4 @@
-from copy import copy
+from copy import copy, deepcopy
 from functools import reduce
 import itertools
 
@@ -62,15 +62,57 @@ def occupied_cells(bitstring):
     return result
 
 
-class Player:
+class Player(object):
     """Wrapper object that represents a player with a unique representation."""
+
+    @property
+    def representation(self):
+        """
+        Returns:
+            (str) a single character that serves as the Player's unique identifier
+        """
+        return self._representation
+
+    @representation.setter
+    def representation(self, value):
+        """
+        Parameters:
+            value (str) a single character that serves as the Player's unique identifier
+        Raises:
+            TypeError if the representation is invalid
+        """
+        try:
+            ord(value)
+        except TypeError:
+            raise TypeError("The player representation must be a single character.")
+        self._representation = value
+
+    @property
+    def next(self):
+        """
+        Raises:
+            RuntimeError if the next Player has not been set
+        Returns:
+            (Player) the next Player in the turn order
+        """
+        if not self._next:
+            raise RuntimeError("No next player has been set.")
+        return self._next
+
+    @next.setter
+    def next(self, value):
+        """
+        Parameters:
+            value (Player) the next Player in the turn order
+        """
+        self._next = value
 
     def __init__(self, representation):
         """
         Creates a Player with a unique string representation.
 
         Parameters:
-            (str) representation a single ascii character that does not belong to any existing player
+            representation (str) a single character that does not belong to any existing player
         Raises:
             TypeError if the string representation is invalid
         """
@@ -79,7 +121,7 @@ class Player:
         except TypeError:
             raise TypeError("The player representation must be a single ascii character.")
         self.representation = representation
-        self.next = None
+        self.next = self
 
     def __eq__(self, other):
         """
@@ -104,30 +146,8 @@ class Player:
         """
         return ord(self.representation)
 
-    def set_next(self, other):
-        """
-        Sets another Player to follow the Player in the turn order.
 
-        Parameters:
-            other (Player) a Player who should go next
-        """
-        self.next = other
-
-    def get_next(self):
-        """
-        Sets another Player to follow the Player in the turn order.
-
-        Raises:
-            RuntimeError if the next Player has not been set
-        Returns:
-            (Player) a Player who should go next
-        """
-        if not self.next:
-            raise RuntimeError("No next player has been set.")
-        return self.next
-
-
-class GameState:
+class GameState(object):
     """Immutable object which represents the state of a Tic-Tac-Toe game."""
 
     EMPTY_CELL = ' '
@@ -143,20 +163,36 @@ class GameState:
         0b001010100
     ]
 
+    @property
+    def data(self):
+        """
+        Returns:
+            (dict) mapping of Players to a bitstring representing the cells they occupy
+        """
+        return self._data
+
+    @property
+    def turn(self):
+        """
+        Returns:
+            (Player) the player whose turn it is
+        """
+        return self._turn
+
     def __init__(self, data, turn):
         """
         Creates a game state from two 3x3 bit-matrices.
         Validates the state upon creation so that it is not possible to have an invalid state.
 
         Parameters:
-            data (dict) mapping of Players to 3x3 bit-matrix or bitstring representing that player's cells
+            data (dict) mapping of Players to 3x3 bit-matrix or bitstring representing the cells they occupy
             turn (Player) the Player whose turn it is
         Raises:
             TypeError if any matrix is neither an int nor a tuple or has the wrong dimensions
             RuntimeError if the specified position is not valid
         """
-        self.data = {p: d if isinstance(d, int) else matrix_to_bitstring(d) for p, d in data.items()}
-        self.turn = turn
+        self._data = {p: d if isinstance(d, int) else matrix_to_bitstring(d) for p, d in data.items()}
+        self._turn = turn
         self.validate()
 
     def __eq__(self, other):
@@ -221,13 +257,6 @@ class GameState:
                 return player
         return self.EMPTY_CELL
 
-    def get_turn(self):
-        """
-        Returns:
-            (Player) the player whose turn it is
-        """
-        return self.turn
-
     def is_grid_filled(self):
         """
         Determines whether the GameState's grid is completely filled and no further moves are possible.
@@ -256,15 +285,18 @@ class GameState:
         """
         Determines whether the GameState represents a valid Tic-Tac-Toe position.
         A valid Tic-Tac-Toe position satisfies the following conditions:
-            1) only one player occupies each cell
-            2) the difference in the number of cells occupied by each player is at most one
-            3) at most one player has a winning sequence
-            4) if a player has a winning sequence, it is the next player's turn
+            1) the player whose turn it is has a bitstring in the data
+            2) only one player occupies each cell
+            3) the difference in the number of cells occupied by each player is at most one
+            4) at most one player has a winning sequence
+            5) if a player has a winning sequence, it is the next player's turn
 
         Raises:
             RuntimeError if any of these conditions are not satisfied
         Returns: (None)
         """
+        if self.turn not in self.data:
+            raise RuntimeError("Turn is invalid.")
         for pair in itertools.combinations(self.data.values(), 2):
             if pair[0] & pair[1]:
                 raise RuntimeError("Cell is occupied by multiple players.")
@@ -273,7 +305,7 @@ class GameState:
         sequences = self.get_winning_sequences()
         if len(sequences) > 1:
             raise RuntimeError("Multiple players have won.")
-        if sequences and next(iter(sequences)).get_next() != self.turn:
+        if sequences and next(iter(sequences)).next != self.turn:
             raise RuntimeError("Turn doesn't correspond to winning player.")
 
     def get_cell_states(self):
@@ -315,13 +347,58 @@ class GameState:
         bitmask = 1 << (8 - (cell[0] * 3 + cell[1]))
         newdata = copy(self.data)
         newdata[self.turn] |= bitmask
-        return GameState(newdata, self.turn.get_next())
+        return GameState(newdata, self.turn.next)
 
 
-class Game:
+class Game(object):
     """Object which represents a Tic-Tac-Toe game."""
 
     EMPTY_GRID = ((0, 0, 0), (0, 0, 0), (0, 0, 0))
+
+    @property
+    def players(self):
+        """
+        Returns:
+            (list) all of the players participating in the Game
+        """
+        return self._players
+
+    @players.setter
+    def players(self, value):
+        """
+        Parameters:
+            value (list) all of the players participating in the Game
+        """
+        players = deepcopy(value)
+        for i in range(len(players)):
+            players[i - 1].next = players[i]
+        self._players = players
+
+    @property
+    def turn(self):
+        """
+        Returns:
+            (Player) the player whose turn it is in the Game
+        """
+        return self.state.turn
+
+    @property
+    def state(self):
+        """
+        Returns:
+            (GameState) the state of the Game
+        """
+        return self._state
+
+    @state.setter
+    def state(self, value):
+        """
+        Changes the Game's GameState.
+
+        Parameters:
+            value (GameState) the new state
+        """
+        self._state = value
 
     def __init__(self, players=[Player('X'), Player('O')]):
         """
@@ -331,10 +408,8 @@ class Game:
         Parameters:
             players (list) Player objects that will participate in the Game
         """
-        for i in range(len(players)):
-            players[i - 1].set_next(players[i])
-        self.players = copy(players)
-        self.state = GameState({p: self.EMPTY_GRID for p in players}, players[0])
+        self.players = players
+        self.state = GameState({p: self.EMPTY_GRID for p in self.players}, self.players[0])
 
     def __str__(self):
         """
@@ -359,20 +434,6 @@ class Game:
     def __nonzero__(self):
         """Python 2 compatibility."""
         return self.__bool__()
-
-    def get_players(self):
-        """
-        Returns:
-            (list) all of the players participating in the Game
-        """
-        return self.players
-
-    def get_turn(self):
-        """
-        Returns:
-            (Player) the player whose turn it is
-        """
-        return self.state.get_turn()
 
     def get_cell_states(self):
         """
@@ -419,10 +480,11 @@ class Game:
             (bool) True if the move is completed successfully, False otherwise
         """
         try:
-            self.state = self.state.generate_successor(cell)
-            return True
+            new = self.state.generate_successor(cell)
         except (TypeError, IndexError, ValueError, RuntimeError):
             return False
+        self.state = new
+        return True
 
 
 if __name__ == '__main__':

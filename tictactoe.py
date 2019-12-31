@@ -21,7 +21,7 @@ def setup():
 
     global tictactoe
     tictactoe = game.Game([game.Player('1'), game.Player('2'), game.Player('3'), game.Player('4')])
-    players = tictactoe.get_players()
+    players = tictactoe.players
 
     global COLOR_SCHEME
     colorMode(HSB, 360, 100, 100, 100)
