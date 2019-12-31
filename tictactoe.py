@@ -17,8 +17,13 @@ def setup():
     X_MARGIN = (width - SIZE) * 0.5
     Y_MARGIN = (height - SIZE) * 0.5
 
-    global tictactoe
-    tictactoe = game.Game()
+    global tictactoe, COLOR_SCHEME, ALPHA_REDUCTION
+    tictactoe = game.Game([game.Player('1'), game.Player('2'), game.Player('3'), game.Player('4')])
+    players = tictactoe.get_players()
+    colorMode(HSB, 360, 100, 100)
+    base_hue = random(360)
+    COLOR_SCHEME = {p: color((base_hue + 360 // len(players) * i) % 360, 100, 50) for i, p in enumerate(players)}
+    ALPHA_REDUCTION = color(0, 0, 0, 102)
 
     # frameRate(1)
 
@@ -37,25 +42,19 @@ def draw():
     # Fill occupied cells
     noStroke()
     for coordinates, state in tictactoe.get_cell_states().items():
-        if state == game.GameState.PLAYER_1:
-            fill(255, 0, 0, 51)  # Red
-        elif state == game.GameState.PLAYER_2:
-            fill(0, 0, 255, 51)  # Blue
+        try:
+            fill(COLOR_SCHEME[state] - ALPHA_REDUCTION)
+        except KeyError:  # Empty cell
+            pass
         else:
-            continue
-        ellipse(CELL_SIZE * (coordinates[0] + 0.5), CELL_SIZE * (coordinates[1] + 0.5), INTERNAL_CELL_SIZE, INTERNAL_CELL_SIZE)
+            ellipse(CELL_SIZE * (coordinates[0] + 0.5), CELL_SIZE * (coordinates[1] + 0.5), INTERNAL_CELL_SIZE, INTERNAL_CELL_SIZE)
 
     try:
         winner, sequences = tictactoe.get_winning_sequences()
-        if winner == game.GameState.PLAYER_1:
-            stroke(255, 0, 0)  # Red
-        elif winner == game.GameState.PLAYER_2:
-            stroke(0, 0, 255)  # Blue
-        else:
-            raise RuntimeError  # Draw
-    except RuntimeError:  # No winner
+    except (RuntimeError, TypeError):  # No winner
         pass
     else:
+        stroke(COLOR_SCHEME[winner])
         strokeWeight(4)
         noFill()
         for coordinates in itertools.chain.from_iterable(sequences):
