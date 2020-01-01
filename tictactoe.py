@@ -1,6 +1,9 @@
-import itertools
+from itertools import chain
 
 import game
+
+
+LENGTH = 3
 
 WINDOW_PADDING_FACTOR = 0.1
 CELL_PADDING_FACTOR = 0.2
@@ -12,7 +15,7 @@ def setup():
 
     global SIZE, CELL_SIZE, INTERNAL_CELL_SIZE, HOVER_CELL_SIZE, X_MARGIN, Y_MARGIN
     SIZE = min(width, height) * (1 - WINDOW_PADDING_FACTOR)
-    CELL_SIZE = SIZE / 3
+    CELL_SIZE = SIZE / LENGTH
     INTERNAL_CELL_SIZE = CELL_SIZE * (1 - CELL_PADDING_FACTOR)
     HOVER_CELL_SIZE = CELL_SIZE * (1 - 0.5 * CELL_PADDING_FACTOR)
     X_MARGIN = (width - SIZE) * 0.5
@@ -20,7 +23,7 @@ def setup():
     rectMode(CENTER)
 
     global tictactoe
-    tictactoe = game.Game([game.Player('1'), game.Player('2'), game.Player('3'), game.Player('4')])
+    tictactoe = game.Game(LENGTH)
     players = tictactoe.players
 
     global COLOR_SCHEME
@@ -36,7 +39,7 @@ def draw():
     # Draw empty grid
     stroke(0, 0, 100, 80)
     strokeWeight(4)
-    for i in range(1, 3):
+    for i in range(1, LENGTH):
         line(0, CELL_SIZE * i, width - X_MARGIN * 2, CELL_SIZE * i)
         line(CELL_SIZE * i, 0, CELL_SIZE * i, height - Y_MARGIN * 2)
 
@@ -44,7 +47,10 @@ def draw():
     cell = mouse_cell()
     if cell:
         noStroke()
-        fill(0, 0, 100, 20)
+        if cell in tictactoe.get_legal_actions():
+            fill(hue(COLOR_SCHEME[tictactoe.turn]), 50, 100, 20)
+        else:
+            fill(0, 0, 100, 20)
         rect(CELL_SIZE * (cell[0] + 0.5), CELL_SIZE * (cell[1] + 0.5), HOVER_CELL_SIZE, HOVER_CELL_SIZE, HOVER_CELL_SIZE * 0.05)
 
     # Fill occupied cells
@@ -66,7 +72,7 @@ def draw():
         stroke(0, 0, 100, 40)
         strokeWeight(8)
         noFill()
-        for coordinates in itertools.chain.from_iterable(sequences):
+        for coordinates in set(chain.from_iterable(sequences)):
             ellipse(CELL_SIZE * (coordinates[0] + 0.5), CELL_SIZE * (coordinates[1] + 0.5), INTERNAL_CELL_SIZE, INTERNAL_CELL_SIZE)
 
 

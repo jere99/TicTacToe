@@ -1,31 +1,36 @@
 from copy import copy, deepcopy
 from functools import reduce
-import itertools
+from itertools import chain, combinations
 
 
 def matrix_to_bitstring(grid):
     """
-    Converts a 3x3 bit-matrix to a bitstring.
-    The bitstring representation is row-major with the (0,0) cell being represented in the 9th bit from the right.
+    Converts a nxn bit-matrix to a bitstring.
+    The bitstring representation is row-major with the (0,0) cell being represented in the most leftmost bit.
 
     Parameters:
-        grid (tuple) 3x3 bit-matrix
+        grid (tuple) nxn bit-matrix
     Raises:
-        TypeError if the grid is not a tuple or has the wrong dimensions
+        TypeError if the grid is not nested tuples or is not square
         ValueError if any of the entries of the matrix are not bit-valued
     Returns:
         (int) bitstring representation of the matrix
     """
-    if not isinstance(grid, tuple) or len(grid) != 3:
-        raise TypeError("Grid is not valid.")
+    if not isinstance(grid, tuple):
+        print(grid)
+        print(type(grid))
+        raise TypeError("Grid is not a tuple.")
+    length = len(grid)
     for row in grid:
-        if not isinstance(row, tuple) or len(row) != 3:
-            raise TypeError("Grid is not valid.")
-    for cell in itertools.chain.from_iterable(grid):
+        if not isinstance(row, tuple):
+            raise TypeError("Row is not a tuple.")
+        if len(row) != length:
+            raise TypeError("Grid is not square.")
+    for cell in chain.from_iterable(grid):
         if int(cell) not in {0, 1}:
-            raise ValueError(cell + " is not a valid bit value.")
+            raise ValueError("{} is not a valid bit value.".format(cell))
 
-    return reduce(lambda acc, cell: acc << 1 | cell, itertools.chain.from_iterable(grid))
+    return reduce(lambda acc, cell: acc << 1 | cell, chain.from_iterable(grid), 0)
 
 
 def bit_sum(bitstring):
@@ -44,20 +49,21 @@ def bit_sum(bitstring):
     return count
 
 
-def occupied_cells(bitstring):
+def occupied_cells(bitstring, n):
     """
-    Generates a list of coordinates of the cells which are occupied in a bitstring representation of a 3x3 bit-matrix.
-    Assumes that the bits are in row-major order and the (0,0) cell is represented by the 9th bit from the right.
+    Generates a list of coordinates of the cells which are occupied in a bitstring representation of a nxn bit-matrix.
+    Assumes that the bits are in row-major order and the (0,0) cell is represented by the leftmost bit.
 
     Parameters:
-        bitstring (int) a bitstring representing a 3x3 bit-matrix
+        bitstring (int) a bitstring representing a nxn bit-matrix
+        length (int) the dimension of the matrix
     Returns:
         (list) tuples of cooordinates which have a value of 1 in the bitstring
     """
     result = []
-    for i in range(9):
+    for i in range(n ** 2):
         if bitstring & 1:
-            result.append(((8 - i) // 3, (8 - i) % 3))
+            result.append(((n ** 2 - 1 - i) // n, (n ** 2 - 1 - i) % n))
         bitstring >>= 1
     return result
 
@@ -152,16 +158,40 @@ class GameState(object):
 
     EMPTY_CELL = ' '
 
-    WINNING_SEQUENCES = [
-        0b111000000,
-        0b000111000,
-        0b000000111,
-        0b100100100,
-        0b010010010,
-        0b001001001,
-        0b100010001,
-        0b001010100
-    ]
+    _winning_sequences = {}
+
+    @classmethod
+    def generate_winning_sequences(cls, length):
+        """
+        Generates the bitstrings that represent the winning sequences for a grid of arbitrary size.
+        The results are cached on the class so that they only need to be generated once.
+
+        Parameters:
+            length (int) the side length of grid to generate sequence for
+        """
+        sequences = []
+        row = (1 << length) - 1
+        column = reduce(lambda acc, _: acc << length | 1, range(length), 0)
+        for _ in range(length):
+            sequences.extend([row, column])
+            row <<= length
+            column <<= 1
+        sequences.append(reduce(lambda acc, i: acc | 1 << i * (length + 1), range(length), 0))
+        sequences.append(reduce(lambda acc, i: acc | 1 << (i + 1) * (length - 1), range(length), 0))
+        cls._winning_sequences[length] = set(sequences)  # Remove duplicates
+
+    @property
+    def winning_sequences(self):
+        """
+        Accesses the winning sequences for the GameState based on its length.
+        Generates the sequences if they are not already cached.
+
+        Returns:
+            (set) the winning sequences for the GameState
+        """
+        if self.length not in self._winning_sequences:
+            self.generate_winning_sequences(self.length)
+        return self._winning_sequences[self.length]
 
     @property
     def data(self):
@@ -172,6 +202,14 @@ class GameState(object):
         return self._data
 
     @property
+    def length(self):
+        """
+        Returns:
+            (int) the side length of the GameState's grid
+        """
+        return self._length
+
+    @property
     def turn(self):
         """
         Returns:
@@ -179,7 +217,7 @@ class GameState(object):
         """
         return self._turn
 
-    def __init__(self, data, turn):
+    def __init__(self, data, length, turn):
         """
         Creates a game state from two 3x3 bit-matrices.
         Validates the state upon creation so that it is not possible to have an invalid state.
@@ -191,7 +229,8 @@ class GameState(object):
             TypeError if any matrix is neither an int nor a tuple or has the wrong dimensions
             RuntimeError if the specified position is not valid
         """
-        self._data = {p: d if isinstance(d, int) else matrix_to_bitstring(d) for p, d in data.items()}
+        self._data = {p: matrix_to_bitstring(d) if isinstance(d, tuple) else d for p, d in data.items()}
+        self._length = length
         self._turn = turn
         self.validate()
 
@@ -202,28 +241,28 @@ class GameState(object):
         Returns:
             (bool) True if the two GameStates have the same bitstrings for both players, False otherwise
         """
-        return isinstance(other, GameState) and not reduce(lambda acc, pair: acc | pair[0] ^ pair[1], zip(self.data.values()))
+        return isinstance(other, GameState) and not reduce(lambda acc, pair: acc | pair[0] ^ pair[1], zip(self.data.values()), 0)
 
     def __str__(self):
         """
         Returns:
             (str) human-readable representation of the GameState
         """
-        return "\n\t--+---+--\n".join(map(lambda row: "\t" + " | ".join(map(lambda column: str(self[(row, column)]), range(3))), range(3)))
+        return "\n\t--+---+--\n".join(["\t" + " | ".join([str(self[(r, c)]) for c in range(self.length)]) for r in range(self.length)])
 
     def __hash__(self):
         """
         Returns:
             (int) a hash of the GameState which depends on both players' bitstrings
         """
-        return reduce(lambda acc, bitstring: acc << 9 | bitstring, self.data.values())
+        return reduce(lambda acc, bitstring: acc << self.length ** 2 | bitstring, self.data.values(), 0)
 
     def __bool__(self):
         """
         Returns:
             (bool) True if the GameState represents an empty board, False otherwise
         """
-        return bool(reduce(lambda acc, bitstring: acc | bitstring, self.data.values()))
+        return bool(reduce(lambda acc, bitstring: acc | bitstring, self.data.values(), 0))
 
     def __nonzero__(self):
         """Python 2 compatibility."""
@@ -248,10 +287,10 @@ class GameState(object):
         for coordinate in cell:
             if not isinstance(coordinate, int):
                 raise TypeError("Each coordinate must be an integer.")
-            if coordinate not in range(3):
-                raise IndexError(coordinate + " is out of range.")
+            if coordinate not in range(self.length):
+                raise IndexError("{} is out of range.".format(coordinate))
 
-        bitmask = 1 << (8 - (cell[0] * 3 + cell[1]))
+        bitmask = 1 << (self.length ** 2 - cell[0] * self.length - cell[1] - 1)
         for player, bitstring in self.data.items():
             if bitstring & bitmask:
                 return player
@@ -264,7 +303,7 @@ class GameState(object):
         Returns:
             (bool) True if the grid is filled, False otherwise
         """
-        return not (0x1FF ^ reduce(lambda acc, bitstring: acc | bitstring, self.data.values()))
+        return not (((1 << self.length ** 2) - 1) ^ reduce(lambda acc, bitstring: acc | bitstring, self.data.values(), 0))
 
     def get_winning_sequences(self):
         """
@@ -276,7 +315,7 @@ class GameState(object):
         """
         result = {}
         for player, bitstring in self.data.items():
-            sequences = [occupied_cells(s) for s in filter(lambda s: not (bitstring & s ^ s), self.WINNING_SEQUENCES)]
+            sequences = [occupied_cells(s, self.length) for s in filter(lambda s: not (bitstring & s ^ s), self.winning_sequences)]
             if sequences:
                 result[player] = sequences
         return result
@@ -297,7 +336,7 @@ class GameState(object):
         """
         if self.turn not in self.data:
             raise RuntimeError("Turn is invalid.")
-        for pair in itertools.combinations(self.data.values(), 2):
+        for pair in combinations(self.data.values(), 2):
             if pair[0] & pair[1]:
                 raise RuntimeError("Cell is occupied by multiple players.")
             if abs(bit_sum(pair[0]) - bit_sum(pair[1])) > 1:
@@ -315,7 +354,7 @@ class GameState(object):
         Returns:
             (dict) map of cell coordinates to the string representation of its state
         """
-        states = {c: p for p, b in self.data.items() for c in occupied_cells(b)}
+        states = {c: p for p, b in self.data.items() for c in occupied_cells(b, self.length)}
         states.update({c: self.EMPTY_CELL for c in self.get_empty_cells()})
         return states
 
@@ -326,7 +365,7 @@ class GameState(object):
         Returns:
             (list) tuples of the coordinates of all unoccupied cells
         """
-        return occupied_cells(0x1FF ^ reduce(lambda acc, bitstring: acc | bitstring, self.data.values()))
+        return occupied_cells(((1 << self.length ** 2) - 1) ^ reduce(lambda acc, bitstring: acc | bitstring, self.data.values(), 0), self.length)
 
     def generate_successor(self, cell):
         """
@@ -342,18 +381,16 @@ class GameState(object):
             (GameState) the successor state
         """
         if cell not in self.get_empty_cells():
-            raise ValueError(cell + " is already occupied.")
+            raise ValueError("{} is already occupied.".format(cell))
 
-        bitmask = 1 << (8 - (cell[0] * 3 + cell[1]))
+        bitmask = 1 << (self.length ** 2 - cell[0] * self.length - cell[1] - 1)
         newdata = copy(self.data)
         newdata[self.turn] |= bitmask
-        return GameState(newdata, self.turn.next)
+        return GameState(newdata, self.length, self.turn.next)
 
 
 class Game(object):
     """Object which represents a Tic-Tac-Toe game."""
-
-    EMPTY_GRID = ((0, 0, 0), (0, 0, 0), (0, 0, 0))
 
     @property
     def players(self):
@@ -373,6 +410,14 @@ class Game(object):
         for i in range(len(players)):
             players[i - 1].next = players[i]
         self._players = players
+
+    @property
+    def length(self):
+        """
+        Returns:
+            (int) the side length of the grid in the Game
+        """
+        return self.state.length
 
     @property
     def turn(self):
@@ -400,23 +445,24 @@ class Game(object):
         """
         self._state = value
 
-    def __init__(self, players=[Player('X'), Player('O')]):
+    def __init__(self, length=3, players=[Player('X'), Player('O')]):
         """
         Creates a new game with an empty board and the specified players.
         Players will take turns in the order specified.
 
         Parameters:
+            length (int) the side length of the grid in the Game
             players (list) Player objects that will participate in the Game
         """
         self.players = players
-        self.state = GameState({p: self.EMPTY_GRID for p in self.players}, self.players[0])
+        self.state = GameState({p: 0 for p in self.players}, length, self.players[0])
 
     def __str__(self):
         """
         Returns:
             (str) human-readable representation of the Game
         """
-        result = "A 3x3 game of Tic-Tac-Toe\n" + str(self.state)
+        result = "A {}x{} game of Tic-Tac-Toe\n".format(self.length, self.length) + str(self.state)
         try:
             sequences = self.get_winning_sequences()
         except RuntimeError:  # Game is not over
@@ -468,7 +514,7 @@ class Game(object):
         Returns:
             (list) tuples of the coordinates of all unoccupied cells
         """
-        return self.state.get_empty_cells()
+        return self.state.get_empty_cells() if self else []
 
     def make_move(self, cell):
         """
