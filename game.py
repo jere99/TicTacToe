@@ -315,7 +315,7 @@ class GameState(object):
         """
         result = {}
         for player, bitstring in self.data.items():
-            sequences = [occupied_cells(s, self.length) for s in filter(lambda s: not (bitstring & s ^ s), self.winning_sequences)]
+            sequences = [occupied_cells(s, self.length) for s in self.winning_sequences if not (bitstring & s ^ s)]
             if sequences:
                 result[player] = sequences
         return result
